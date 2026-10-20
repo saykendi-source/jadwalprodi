@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jadwal Perkuliahan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e7ecf2; --surface:#ffffff; --surface-2:#e3e9f0; --ink:#14233a; --muted:#56657a; --line:#cfd7e2;
+  --accent:#1f4f8f; --on-accent:#ffffff;
+  --live:#157a4a; --live-soft:#dcf1e6; --wait:#9a5300; --wait-soft:#fbecd5; --idle:#5b6779; --idle-soft:#e6eaf0;
+  --bad:#b42318; --bad-soft:#fde4e1;
+  --band:rgba(20,35,58,.09);
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1a2b; --surface:#17253a; --surface-2:#22324a; --ink:#eef3f9; --muted:#93a3b8; --line:#2a3b54;
+    --accent:#3d7fd6; --on-accent:#ffffff;
+    --live:#4fd18b; --live-soft:#173a2c; --wait:#f5b042; --wait-soft:#3d2f14; --idle:#9aa8bb; --idle-soft:#22324a;
+    --bad:#ff8a7a; --bad-soft:#3d1d1b;
+    --band:rgba(255,255,255,.07);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1a2b; --surface:#17253a; --surface-2:#22324a; --ink:#eef3f9; --muted:#93a3b8; --line:#2a3b54;
+  --accent:#3d7fd6; --on-accent:#ffffff;
+  --live:#4fd18b; --live-soft:#173a2c; --wait:#f5b042; --wait-soft:#3d2f14; --idle:#9aa8bb; --idle-soft:#22324a;
+  --bad:#ff8a7a; --bad-soft:#3d1d1b;
+  --band:rgba(255,255,255,.07);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);
+  font-family:"Plus Jakarta Sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums}
+
+/* Panggung 1920x1080, diskalakan agar selalu 16:9 */
+.viewport{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);overflow:hidden}
+.stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;
+  display:grid;grid-template-rows:100px 56px minmax(0,1fr) 56px;gap:16px;padding:32px 40px}
+
+/* Header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:40px;min-width:0}
+.top h1{margin:0;font-size:46px;font-weight:800;letter-spacing:-.025em;line-height:1;white-space:nowrap}
+.top p{margin:10px 0 0;font-size:22px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:18px;white-space:nowrap}
+.views{display:inline-flex;align-items:center;gap:8px}
+.views i{display:block;width:34px;height:8px;border-radius:4px;background:var(--line)}
+.views i.on{background:var(--accent)}
+.data-info{font-size:17px;font-weight:600;color:var(--muted)}
+.data-info.err{color:var(--bad)}
+.clock{text-align:right;flex:none}
+.clock .time{font-size:86px;font-weight:800;line-height:.9;letter-spacing:-.04em}
+.clock .time small{font-size:38px;color:var(--muted);font-weight:700;margin-left:6px;letter-spacing:0}
+.clock .date{font-size:22px;color:var(--muted);font-weight:600;margin-top:8px}
+.demo-tag{display:none;margin-left:10px;background:var(--wait-soft);color:var(--wait);font-size:17px;padding:2px 10px;border-radius:6px}
+.sim .demo-tag{display:inline-block}
+
+/* Banner */
+.banner{display:flex;align-items:center;gap:20px;padding:0 24px;border-radius:14px;background:var(--surface);border:1px solid var(--line);white-space:nowrap;overflow:hidden}
+.banner.major{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.banner.bad{background:var(--bad);color:#fff;border-color:var(--bad)}
+.banner b{font-size:26px;font-weight:800}
+.banner span{font-size:22px;font-weight:600;opacity:.88;overflow:hidden;text-overflow:ellipsis}
+.banner .cd{margin-left:auto;font-size:30px;font-weight:800;opacity:1;flex:none}
+
+/* Tampilan bergantian */
+.views-area{position:relative;min-height:0}
+.view{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity .7s ease,visibility 0s linear .7s}
+.view.on{opacity:1;visibility:visible;transition:opacity .7s ease}
+@media (prefers-reduced-motion:reduce){.view,.view.on{transition:none}}
+
+/* Papan ruang */
+.board{display:grid;grid-template-columns:1fr 1fr;gap:28px;height:100%}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0;height:100%}
+.ghead{height:36px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 6px 2px}
+.ghead b{font-size:22px;font-weight:800;background:var(--g);color:#fff;padding:3px 12px;border-radius:8px}
+.ghead span{font-size:18px;color:var(--muted);font-weight:600}
+.ghead.here span{color:var(--ink);font-weight:700}
+.row{position:relative;flex:1 1 0;max-height:104px;min-height:0;display:grid;grid-template-columns:196px minmax(0,1fr) 186px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row.done,.row.libur{opacity:.55}
+.rno{display:flex;flex-direction:column;justify-content:center;padding-left:22px;margin-right:14px;line-height:1;background:var(--g);color:#fff;min-width:0}
+.rno small{font-size:15px;font-weight:700;opacity:.85}
+.rno b{font-size:42px;font-weight:800;letter-spacing:-.03em;margin-top:4px;white-space:nowrap}
+.rno em{font-style:normal;font-size:14px;font-weight:700;opacity:.85;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:8px 18px 10px 0;min-width:0}
+.l1{display:flex;align-items:center;gap:10px;white-space:nowrap;font-size:18px;font-weight:700;min-width:0}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:16px;font-weight:700;padding:3px 11px;border-radius:999px;flex:none}
+.status i{width:10px;height:10px;border-radius:50%;background:currentColor}
+.s-live{background:var(--live-soft);color:var(--live)}
+.s-live i{animation:pulse 1.8s ease-in-out infinite}
+.s-wait{background:var(--wait-soft);color:var(--wait)}
+.s-idle{background:var(--idle-soft);color:var(--idle)}
+.s-bad{background:var(--bad-soft);color:var(--bad)}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.s-live i{animation:none}}
+.chip{background:var(--c);color:#fff;padding:1px 8px;border-radius:6px;font-size:17px;flex:none}
+.pg{border:2px solid var(--accent);color:var(--accent);padding:0 7px;border-radius:6px;font-size:15px;flex:none}
+.kls{overflow:hidden;text-overflow:ellipsis}
+.ttl{font-size:28px;font-weight:800;line-height:1.12;letter-spacing:-.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttl.long{font-size:23px}
+.ttl.xlong{font-size:19px}
+.ttl.strike{text-decoration:line-through;text-decoration-thickness:3px;color:var(--muted)}
+.l3{display:flex;justify-content:space-between;gap:14px;white-space:nowrap;font-size:18px;color:var(--muted);font-weight:600}
+.l3 span:first-child{overflow:hidden;text-overflow:ellipsis}
+.l3 .rem{color:var(--ink);font-weight:700;flex:none}
+.idle-msg{font-size:25px;font-weight:700;color:var(--idle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prog{position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--surface-2)}
+.prog span{display:block;height:100%;background:var(--c)}
+.nx{border-left:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;padding:8px 18px;min-width:0}
+.nx .lbl{font-size:15px;color:var(--muted);font-weight:700}
+.nx .nt{font-size:30px;font-weight:800;line-height:1.1;letter-spacing:-.02em}
+.nx .nm{font-size:16px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nx .none{font-size:18px;color:var(--muted);font-weight:600}
+.empty{height:100%;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:var(--muted);
+  background:var(--surface);border:1px dashed var(--line);border-radius:16px;text-align:center;padding:40px}
+
+/* Linimasa */
+.tl{height:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 32px 20px;
+  display:grid;grid-template-columns:190px minmax(0,1fr);grid-template-rows:32px;grid-auto-rows:minmax(0,1fr);row-gap:6px;align-items:center}
+.tl-title{font-size:20px;font-weight:700;color:var(--muted)}
+.tl-hours{position:relative;height:28px;font-size:17px;color:var(--muted);font-weight:600}
+.tl-hours span{position:absolute;bottom:0;transform:translateX(-50%)}
+.tl-hours span:first-child{transform:none}
+.tl-hours span:last-child{transform:translateX(-100%)}
+.tl-label{display:flex;align-items:baseline;gap:10px;white-space:nowrap;min-width:0}
+.tl-label b{font-size:21px;font-weight:800;background:var(--g);color:#fff;padding:2px 10px;border-radius:7px}
+.tl-label small{font-size:14px;color:var(--muted);font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.tl-track{position:relative;height:min(42px,100%);background:var(--surface-2);border-radius:8px;overflow:hidden}
+.tl-band{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,var(--band) 0 6px,transparent 6px 12px)}
+.tl-ev{position:absolute;top:4px;bottom:4px;background:var(--c);color:#fff;border-radius:6px;font-size:16px;font-weight:700;
+  display:flex;align-items:center;padding:0 8px;white-space:nowrap;overflow:hidden}
+.tl-ev.past{opacity:.35}
+.tl-ev.batal{background:repeating-linear-gradient(135deg,var(--c) 0 8px,transparent 8px 14px);color:var(--ink);text-decoration:line-through;outline:2px solid var(--c);outline-offset:-2px}
+.tl-now{position:absolute;top:0;bottom:0;width:4px;background:var(--ink);transform:translateX(-50%)}
+
+/* Pengumuman */
+.ticker{display:flex;align-items:stretch;border-radius:14px;overflow:hidden;background:var(--ink);color:var(--bg)}
+.ticker .tag{display:flex;align-items:center;padding:0 22px;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:22px}
+.ticker .run{flex:1;position:relative;overflow:hidden}
+.ticker .track{position:absolute;top:0;bottom:0;left:0;display:flex;align-items:center;white-space:nowrap;
+  font-size:24px;font-weight:600;animation:marquee var(--dur,40s) linear infinite}
+.ticker .track span{padding-left:80px}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.ticker .track{animation:none}}
+
+/* Di luar jam tampil */
+.off{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:var(--bg);text-align:center}
+.is-off .off{display:flex}
+.off .t{font-size:180px;font-weight:800;letter-spacing:-.05em;line-height:1;color:var(--muted)}
+.off p{margin:0;font-size:34px;font-weight:700}
+.off small{font-size:24px;color:var(--muted);font-weight:600}
+
+/* Panel demo (tidak ikut diskalakan) */
+.demo{position:fixed;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));
+  z-index:20;width:min(360px,calc(100vw - 28px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;
+  padding:14px 16px;font-size:14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.demo[hidden]{display:none}
+.demo-h{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:15px}
+.demo input[type=range]{width:100%;margin:12px 0 8px;accent-color:var(--accent)}
+.demo-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.demo-row + .demo-row{margin-top:8px}
+.demo button{font:inherit;font-weight:700;font-size:13px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);
+  border-radius:8px;padding:5px 9px;cursor:pointer}
+.demo button.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.demo button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.demo .val{font-weight:800;font-size:20px;margin-right:auto}
+.demo p{margin:10px 0 0;color:var(--muted);font-size:12.5px;line-height:1.45}
+.demo code{font-size:12px}
+</style>
+</head>
+<body>
+<div class="viewport">
+  <div class="stage" id="stage">
+    <header class="top">
+      <div style="min-width:0">
+        <h1 id="judul">Jadwal perkuliahan hari ini</h1>
+        <p><span id="subjudul"></span><span class="views" id="viewDots" aria-hidden="true"></span><span id="viewName"></span><span class="data-info" id="dataInfo"></span></p>
+      </div>
+      <div class="clock">
+        <div class="time" id="jam">--:--<small>--</small></div>
+        <div class="date"><span id="tanggal"></span><span class="demo-tag">Mode demo</span></div>
+      </div>
+    </header>
+
+    <div class="banner" id="banner" role="status"><b></b><span></span><span class="cd"></span></div>
+
+    <main class="views-area" id="views"></main>
+
+    <footer class="ticker">
+      <div class="tag">Info</div>
+      <div class="run"><div class="track" id="tickTrack"></div></div>
+    </footer>
+
+    <div class="off" aria-hidden="true">
+      <div class="t" id="offJam">--:--</div>
+      <p>Di luar jam perkuliahan</p>
+      <small id="offInfo"></small>
+    </div>
+  </div>
+</div>
+
+<div class="demo" id="demo" hidden>
+  <div class="demo-h">Simulasi waktu <button data-act="hide" aria-label="Sembunyikan panel">Tutup</button></div>
+  <input type="range" id="slider" min="360" max="1320" step="1" aria-label="Jam simulasi">
+  <div class="demo-row">
+    <span class="val" id="sliderVal">--.--</span>
+    <button data-act="real">Waktu nyata</button>
+    <button data-act="x1">×1</button>
+    <button data-act="x60">×60</button>
+  </div>
+  <div class="demo-row" id="presets"></div>
+  <div class="demo-row"><button data-act="view">Ganti tampilan</button><button data-act="rotate">Rotasi otomatis</button><button data-act="reload">Muat data</button></div>
+  <p>Tekan <b>D</b> untuk menampilkan atau menyembunyikan panel. Parameter URL: <code>?lokasi=F4</code>, <code>?gedung=F4,F6</code>, <code>?hari=Kamis</code>, <code>?jam=09:30</code>, <code>?rotasi=0</code>, <code>?tema=gelap</code>, <code>?demo=1</code>.</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =====================================================================
+   PENGATURAN
+   ===================================================================== */
+const CONFIG = {
+  // URL Web App Google Apps Script (berakhiran /exec). Kosongkan untuk memakai data contoh.
+  SUMBER_DATA: "",
+  MUAT_ULANG_MENIT: 5,                      // seberapa sering data diambil ulang
+  DURASI_TAMPILAN: { board: 40, timeline: 15 }, // detik per tampilan
+  BARIS_PER_KOLOM: 6,                       // 2 kolom x 6 baris = 12 ruang per halaman
+  PAKAI_OFFLINE: true                       // daftarkan service worker (sw.js)
+};
+
+/* Data contoh (Kamis). Formatnya sama dengan keluaran Apps Script. */
+const DATA_CONTOH = {
+  pengaturan: {
+    lokasiLayar: "F4",
+    judul: "Jadwal perkuliahan hari ini",
+    jamTampilMulai: "06:30", jamTampilSelesai: "21:30",
+    warnaGedung: { F4: "#0d6e63", F6: "#44546e" },
+    pesanDefault: "Jadwal dapat berubah sewaktu-waktu. Perhatikan pengumuman dari program studi."
+  },
+  ruang: [
+    { id: "F4.001", gedung: "F4" }, { id: "F4.002", gedung: "F4" }, { id: "F4.003", gedung: "F4" },
+    { id: "F6.001", gedung: "F6", nama: "RK Besar" }, { id: "F6.002", gedung: "F6" }, { id: "F6.003", gedung: "F6" },
+    { id: "F6.004", gedung: "F6" }, { id: "F6.101", gedung: "F6" }, { id: "F6.102", gedung: "F6" },
+    { id: "F6.103", gedung: "F6" }, { id: "F6.202", gedung: "F6" }, { id: "F6.203", gedung: "F6" }
+  ],
+  jeda: [
+    { hari: "Semua", mulai: "08:40", selesai: "08:50", label: "Pergantian sesi", besar: false },
+    { hari: "Semua", mulai: "10:30", selesai: "10:40", label: "Pergantian sesi", besar: false },
+    { hari: "Semua", mulai: "11:30", selesai: "12:20", label: "Istirahat Dhuhur", besar: true },
+    { hari: "Semua", mulai: "13:10", selesai: "13:20", label: "Pergantian sesi", besar: false },
+    { hari: "Semua", mulai: "15:00", selesai: "15:30", label: "Istirahat Ashar", besar: true },
+    { hari: "Semua", mulai: "18:00", selesai: "18:30", label: "Istirahat Maghrib", besar: true }
+  ],
+  kegiatan: [
+    ["F4.001","08:50","11:30","AI106","A","Perancangan Basis Data","","AL","magenta"],
+    ["F4.002","08:50","11:30","TI502","B","Pengembangan Aplikasi Mobile","","HS","oranye"],
+    ["F4.002","13:20","16:20","TI502","E","Pengembangan Aplikasi Mobile","","HS","oranye"],
+    ["F4.002","16:20","19:20","TI502","C","Pengembangan Aplikasi Mobile","","HS","oranye"],
+    ["F4.003","08:50","11:30","TI303","B","Implementasi Basis Data","","AK","emas"],
+    ["F4.003","13:20","16:20","TI303","D","Implementasi Basis Data","","AK","emas"],
+    ["F4.003","16:20","19:20","TI303","C","Implementasi Basis Data","","AK","emas"],
+    ["F6.001","08:50","11:30","TI505","D, E, F","Tata Kelola Teknologi Informasi","","CO","oranye"],
+    ["F6.001","13:20","16:20","TI505","A, B, C","Tata Kelola Teknologi Informasi","","CO","oranye"],
+    ["F6.002","08:50","11:30","TIPR02","A","Teknologi Multimedia","","DP","biru"],
+    ["F6.002","13:20","16:20","TIDA03","A","Analisis Big Data","","SR / AD","biru"],
+    ["F6.003","08:50","11:30","TI305","C","Teknologi Server","","EP","emas"],
+    ["F6.003","13:20","16:20","AI104","A","Pemrograman Dasar","","HQ","magenta"],
+    ["F6.003","16:20","18:00","TI504","B","WAN dan Teknologi Jaringan","","EP","emas"],
+    ["F6.004","08:50","11:30","TI26103","IUP","Basics of Information Technology","","FF","iup"],
+    ["F6.004","16:20","17:10","TI304","E","Switching dan Wireless","","NA","emas"],
+    ["F6.004","17:10","19:20","TI304","E","Praktikum Switching dan Wireless","","NA","emas"],
+    ["F6.101","08:50","11:30","TI26103","D","Dasar Teknologi Informasi","","HQ","iup"],
+    ["F6.101","13:20","15:00","TI304","B","Switching dan Wireless","","NA","emas"],
+    ["F6.101","15:30","16:20","TI304","B","Praktikum Switching dan Wireless","","NA","emas"],
+    ["F6.102","08:50","11:30","TI305","E","Teknologi Server","","TA","emas"],
+    ["F6.102","13:20","16:20","TI305","A","Teknologi Server","","TA","emas"],
+    ["F6.103","08:50","11:30","TI302","A","Pemrograman Multiplatform","","CD","emas"],
+    ["F6.103","13:20","16:20","TI501","D","Pengembangan Aplikasi Web","","QA","oranye"],
+    ["F6.202","07:00","08:40","TI308","E","Bahasa Inggris Lanjut","","TW","emas"],
+    ["F6.203","10:40","13:10","TI704","E","Bahasa Inggris untuk Penulisan Naskah Akademik","B. Inggris untuk Penulisan Naskah Akademik","TW","biru"],
+    ["F6.203","13:20","16:20","TI26102","IUP","Information Technology Mathematics 1","","AL","iup"]
+  ].map(r => ({ hari: "Kamis", ruang: r[0], mulai: r[1], selesai: r[2], kode: r[3], kelas: r[4], matkul: r[5], matkulTV: r[6], dosen: r[7], warna: r[8] })),
+  perubahan: [],
+  pengumuman: [
+    { teks: "Layar ini berada di Gedung F4. Ruang berawalan F6 ada di Gedung F6, perhitungkan waktu berjalan ke sana." },
+    { teks: "Mohon matikan proyektor dan AC setelah perkuliahan selesai." }
+  ]
+};
+const DATA_KOSONG = { pengaturan: {}, ruang: [], jeda: [], kegiatan: [], perubahan: [], pengumuman: [] };
+
+/* =====================================================================
+   UTILITAS
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+if (qs.get("tema") === "gelap") document.documentElement.dataset.theme = "dark";
+if (qs.get("tema") === "terang") document.documentElement.dataset.theme = "light";
+
+const HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const PALET = {
+  oranye: "#c4501a", jingga: "#c4501a", biru: "#2a6db5", emas: "#9a6a06", kuning: "#9a6a06",
+  iup: "#b8306a", pink: "#b8306a", "merah muda": "#b8306a", magenta: "#a21caf", ungu: "#6b3fa0",
+  hijau: "#1d7a3e", toska: "#0d6e63", merah: "#b42318", coklat: "#7a4b12", abu: "#56657a"
+};
+const WARNA_GEDUNG_CADANGAN = ["#0d6e63", "#44546e", "#7a4b12", "#4a3f8f", "#1f4f8f"];
+
+const pad = n => String(n).padStart(2, "0");
+const toMin = s => {
+  const m = String(s == null ? "" : s).trim().match(/^(\d{1,2})[:.](\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+};
+const fmt = m => { m = Math.round(m); return pad(Math.floor(m / 60) % 24) + "." + pad(m % 60); };
+const dur = m => { m = Math.max(1, Math.ceil(m)); const h = Math.floor(m / 60), r = m % 60; return h ? h + " jam" + (r ? " " + r + " mnt" : "") : r + " menit"; };
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const cdText = sec => { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return (h ? h + ":" + pad(m) : m) + ":" + pad(s); };
+const normHari = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+const normJenis = s => { const v = String(s || "").toLowerCase(); if (v.includes("batal")) return "batal"; if (v.includes("ganti") || v.includes("tambah")) return "pengganti"; if (v.includes("libur")) return "libur"; return v.trim(); };
+const tglLokal = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+function normTanggal(s){
+  s = String(s || "").trim(); if (!s) return "";
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1] + "-" + pad(m[2]) + "-" + pad(m[3]);
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); if (m) return m[3] + "-" + pad(m[2]) + "-" + pad(m[1]);
+  return "";
+}
+const warnaDari = (w, cadangan) => {
+  const k = String(w || "").trim().toLowerCase();
+  if (PALET[k]) return PALET[k];
+  return /^#[0-9a-f]{3,8}$/i.test(k) ? k : (cadangan || "#56657a");
+};
+const eq = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+
+/* =====================================================================
+   SKALA PANGGUNG 16:9
+   ===================================================================== */
+const stage = $("stage");
+let shift = { x: 0, y: 0 };
+function fit(){
+  const vp = stage.parentElement.getBoundingClientRect();
+  const s = Math.min(vp.width / 1920, vp.height / 1080);
+  stage.style.transform = `translate(${(vp.width - 1920 * s) / 2 + shift.x}px, ${(vp.height - 1080 * s) / 2 + shift.y}px) scale(${s})`;
+}
+addEventListener("resize", fit);
+// Geser sedikit tiap 2 menit untuk mencegah burn-in di TV OLED.
+setInterval(() => { shift = { x: Math.round(Math.random() * 6 - 3), y: Math.round(Math.random() * 6 - 3) }; fit(); }, 120000);
+
+/* =====================================================================
+   STATE DATA
+   ===================================================================== */
+let RAW = null, SAMPLE = false, P = {}, ROOMS = [], GEDUNG = [], EV = [], BR = [], LIBUR = null, NOTICES = [];
+let firstStart = 0, lastEnd = 0, T0 = 420, T1 = 1260, curTgl = "", hariAktif = "";
+let dataInfo = { ok: null, err: false, cache: false }, lastRaw = "";
+const CACHE_KEY = "jadwal-tv-data";
+
+function terima(raw, sample){ RAW = raw; SAMPLE = sample; susun(); }
+
+/* Gabungkan baris kegiatan menjadi kegiatan utuh, lalu potong oleh istirahat besar. */
+function kurangiJeda(segs){
+  let out = segs.map(s => s.slice());
+  BR.filter(b => b.besar).forEach(b => {
+    out = out.flatMap(([a, c]) => (b.en <= a || b.st >= c) ? [[a, c]] :
+      [].concat(b.st > a ? [[a, b.st]] : [], b.en < c ? [[b.en, c]] : []));
+  });
+  return out.filter(([a, c]) => c - a >= 5);
+}
+function susunKegiatan(rows){
+  const g = new Map();
+  rows.forEach(r => {
+    const st = toMin(r.mulai), en = toMin(r.selesai);
+    if (!(en > st)) return;
+    const o = {
+      ruang: String(r.ruang || "").trim(), kode: String(r.kode || "").trim(), kelas: String(r.kelas || "").trim(),
+      matkul: String(r.matkul || "").trim(), matkulTV: String(r.matkulTV || r.matkul_tv || "").trim(),
+      dosen: String(r.dosen || "").trim(), warna: warnaDari(r.warna), pengganti: !!r.pengganti
+    };
+    const k = [o.ruang, o.kode, o.kelas, o.matkul, o.dosen, o.pengganti].join("|");
+    if (!g.has(k)) g.set(k, { o, segs: [] });
+    g.get(k).segs.push([st, en]);
+  });
+  const out = [];
+  g.forEach(({ o, segs }) => {
+    segs.sort((a, b) => a[0] - b[0]);
+    const m = [];
+    segs.forEach(s => { const l = m[m.length - 1]; if (l && s[0] <= l[1]) l[1] = Math.max(l[1], s[1]); else m.push(s.slice()); });
+    // Jarak lebih dari 60 menit dianggap pertemuan terpisah.
+    const groups = []; let cur = [];
+    m.forEach(s => { if (cur.length && s[0] - cur[cur.length - 1][1] > 60) { groups.push(cur); cur = []; } cur.push(s); });
+    if (cur.length) groups.push(cur);
+    groups.forEach(gr => {
+      const seg = kurangiJeda(gr); if (!seg.length) return;
+      out.push(Object.assign({}, o, { seg, st: seg[0][0], en: seg[seg.length - 1][1], batal: false, ket: "" }));
+    });
+  });
+  out.sort((a, b) => a.st - b.st || a.ruang.localeCompare(b.ruang));
+  return out;
+}
+function cocokBatal(e, p){
+  if (e.pengganti || !p.kode || !eq(e.kode, p.kode)) return false;
+  if (p.kelas && !eq(e.kelas, p.kelas)) return false;
+  if (p.ruang && !eq(e.ruang, p.ruang)) return false;
+  const m = toMin(p.mulai);
+  if (!isNaN(m) && !(m >= e.st - 30 && m < e.en)) return false;
+  return true;
+}
+
+function susun(){
+  const R = Object.assign({}, DATA_KOSONG, RAW || {});
+  const now = new Date();
+  curTgl = tglLokal(now);
+  hariAktif = qs.get("hari") || (SAMPLE ? "Kamis" : HARI[now.getDay()]);
+
+  P = Object.assign({ judul: "Jadwal perkuliahan hari ini", jamTampilMulai: "06:30", jamTampilSelesai: "21:30", warnaGedung: {}, lokasiLayar: "", pesanDefault: "" }, R.pengaturan || {});
+  P.lokasiLayar = String(qs.get("lokasi") || P.lokasiLayar || "").trim().toUpperCase();
+
+  const filterG = String(qs.get("gedung") || "").toUpperCase().split(",").map(s => s.trim()).filter(Boolean);
+  ROOMS = (R.ruang || []).map((r, i) => {
+    const id = String(r.id || "").trim();
+    return { id, gedung: String(r.gedung || id.split(".")[0] || "").trim().toUpperCase(), nama: String(r.nama || "").trim(), i };
+  }).filter(r => r.id && (!filterG.length || filterG.includes(r.gedung)));
+  ROOMS.sort((a, b) => ((a.gedung === P.lokasiLayar ? 0 : 1) - (b.gedung === P.lokasiLayar ? 0 : 1)) || a.i - b.i);
+  GEDUNG = [...new Set(ROOMS.map(r => r.gedung))];
+  const ids = new Set(ROOMS.map(r => r.id));
+  const h = normHari(hariAktif);
+
+  // Jeda: pakai baris khusus hari ini bila ada, kalau tidak pakai baris "Semua".
+  let j = (R.jeda || []).filter(x => normHari(x.hari) === h);
+  if (!j.length) j = (R.jeda || []).filter(x => { const v = normHari(x.hari); return !v || v === "semua"; });
+  BR = j.map(x => ({ label: x.label || "Jeda", besar: x.besar === true || /^(ya|y|true|1)$/i.test(String(x.besar)), st: toMin(x.mulai), en: toMin(x.selesai) }))
+        .filter(x => x.en > x.st).sort((a, b) => a.st - b.st);
+
+  // Perubahan untuk tanggal hari ini
+  const ubah = (R.perubahan || []).filter(p => normTanggal(p.tanggal) === curTgl);
+  const liburSemua = ubah.find(p => normJenis(p.jenis) === "libur" && !String(p.ruang || "").trim());
+  LIBUR = liburSemua ? (String(liburSemua.keterangan || "").trim() || "Tidak ada perkuliahan hari ini") : null;
+
+  let rows = LIBUR ? [] : (R.kegiatan || []).filter(x => normHari(x.hari) === h).map(x => Object.assign({}, x, { pengganti: false }));
+  if (!LIBUR) ubah.filter(p => normJenis(p.jenis) === "pengganti").forEach(p => rows.push(Object.assign({}, p, { pengganti: true })));
+  rows = rows.filter(r => ids.has(String(r.ruang || "").trim()));
+  EV = susunKegiatan(rows);
+
+  ubah.forEach(p => {
+    const jn = normJenis(p.jenis);
+    if (jn === "batal") EV.forEach(e => { if (cocokBatal(e, p)) { e.batal = true; e.ket = String(p.keterangan || "").trim(); } });
+    if (jn === "libur" && String(p.ruang || "").trim()) EV.forEach(e => { if (eq(e.ruang, p.ruang)) { e.batal = true; e.ket = String(p.keterangan || "").trim() || "Ruang tidak digunakan"; } });
+  });
+
+  // Pengumuman: perubahan hari ini otomatis diumumkan, lalu pengumuman aktif.
+  NOTICES = [];
+  if (LIBUR) NOTICES.push("Libur hari ini: " + LIBUR);
+  EV.filter(e => e.batal).forEach(e => NOTICES.push(`Dibatalkan hari ini: ${e.kode} (${e.kelas}) ${e.matkul} di ${e.ruang}, pukul ${fmt(e.st)}.${e.ket ? " " + e.ket : ""}`));
+  EV.filter(e => e.pengganti && !e.batal).forEach(e => NOTICES.push(`Kuliah pengganti hari ini: ${e.kode} (${e.kelas}) ${e.matkul} di ${e.ruang}, ${fmt(e.st)}–${fmt(e.en)}.`));
+  (R.pengumuman || []).forEach(p => {
+    const a = normTanggal(p.mulai), b = normTanggal(p.sampai);
+    if ((a && curTgl < a) || (b && curTgl > b)) return;
+    if (String(p.teks || "").trim()) NOTICES.push(String(p.teks).trim());
+  });
+  if (!NOTICES.length) NOTICES.push(P.pesanDefault || "Jadwal dapat berubah sewaktu-waktu.");
+
+  const aktif = EV.filter(e => !e.batal);
+  firstStart = aktif.length ? Math.min(...aktif.map(x => x.st)) : 0;
+  lastEnd = aktif.length ? Math.max(...aktif.map(x => x.en)) : 0;
+  T0 = Math.min(7 * 60, ...EV.map(x => Math.floor(x.st / 60) * 60));
+  T1 = Math.max(21 * 60, ...EV.map(x => Math.ceil(x.en / 60) * 60));
+
+  $("judul").textContent = P.judul;
+  document.title = P.judul + (GEDUNG.length ? " – Gedung " + GEDUNG.join(", ") : "");
+  const namaGedung = GEDUNG.length > 1 ? GEDUNG.slice(0, -1).join(", ") + " dan " + GEDUNG[GEDUNG.length - 1] : GEDUNG.join("");
+  $("subjudul").textContent = (GEDUNG.length ? "Gedung " + namaGedung : "Belum ada ruang") +
+    (SAMPLE ? `, data contoh hari ${hariAktif}` : (qs.get("hari") ? `, jadwal hari ${hariAktif}` : ""));
+  $("offInfo").textContent = `Jadwal tampil kembali pukul ${fmt(toMin(P.jamTampilMulai) || 390)}`;
+
+  buildViews();
+  buildTicker();
+  lastKey = null;
+  tick();
+}
+
+function gColor(g){
+  const i = GEDUNG.indexOf(g);
+  return warnaDari((P.warnaGedung || {})[g], WARNA_GEDUNG_CADANGAN[(i < 0 ? 0 : i) % WARNA_GEDUNG_CADANGAN.length]);
+}
+
+/* =====================================================================
+   PENGAMBILAN DATA
+   ===================================================================== */
+async function muatData(){
+  if (!CONFIG.SUMBER_DATA) return;
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 25000);
+    const r = await fetch(CONFIG.SUMBER_DATA, { cache: "no-store", signal: ctrl.signal });
+    clearTimeout(to);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if (!j || !Array.isArray(j.ruang)) throw new Error("Format data tidak dikenal");
+    const s = JSON.stringify(Object.assign({}, j, { diperbarui: "" }));
+    if (s !== lastRaw) { lastRaw = s; terima(j, false); }
+    dataInfo = { ok: new Date(), err: false, cache: false };
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(j)); } catch (e) {}
+  } catch (err) {
+    dataInfo.err = true;
+    console.warn("Gagal memuat data jadwal:", err);
+  }
+  renderDataInfo();
+}
+function muatCache(){
+  try {
+    const c = localStorage.getItem(CACHE_KEY);
+    if (!c) return false;
+    const j = JSON.parse(c);
+    lastRaw = JSON.stringify(Object.assign({}, j, { diperbarui: "" }));
+    dataInfo.cache = true;
+    terima(j, false);
+    return true;
+  } catch (e) { return false; }
+}
+function renderDataInfo(){
+  const el = $("dataInfo");
+  let txt = "", err = false;
+  if (SAMPLE) txt = "Data contoh";
+  else if (dataInfo.err && dataInfo.ok) { txt = "Gagal memperbarui, data pukul " + fmt(dataInfo.ok.getHours() * 60 + dataInfo.ok.getMinutes()); err = true; }
+  else if (dataInfo.err) { txt = dataInfo.cache ? "Offline, memakai data tersimpan" : "Data belum dapat dimuat"; err = true; }
+  else if (dataInfo.ok) txt = "Diperbarui " + fmt(dataInfo.ok.getHours() * 60 + dataInfo.ok.getMinutes());
+  el.textContent = txt;
+  el.classList.toggle("err", err);
+}
+
+/* =====================================================================
+   JAM NYATA / SIMULASI
+   ===================================================================== */
+let clock = { sim: false, base: 0, at: 0, speed: 1 };
+function nowMin(){
+  if (!clock.sim) { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000; }
+  return (clock.base + (Date.now() - clock.at) / 60000 * clock.speed) % 1440;
+}
+function setSim(m, speed){ clock = { sim: true, base: m, at: Date.now(), speed: speed || 1 }; lastKey = null; syncDemo(); }
+function setReal(){ clock = { sim: false, base: 0, at: 0, speed: 1 }; lastKey = null; syncDemo(); }
+
+/* =====================================================================
+   STATUS RUANG
+   ===================================================================== */
+function roomState(room, t){
+  if (LIBUR) return { type: "libur" };
+  const evs = EV.filter(x => x.ruang === room);
+  const aktif = evs.filter(x => !x.batal);
+  const after = en => aktif.find(x => x.st >= en);
+  for (const x of aktif) {
+    if (t >= x.st && t < x.en) {
+      if (x.seg.some(([a, b]) => t >= a && t < b)) return { type: "live", x, next: after(x.en) };
+      return { type: "pause", x, resume: x.seg.find(([a]) => a > t), next: after(x.en) };
+    }
+  }
+  const up = aktif.find(x => x.st > t);
+  const bt = evs.find(x => x.batal && t >= x.st - 15 && t < x.en);
+  if (bt && (!up || up.st - t > 15)) return { type: "cancel", x: bt, next: up };
+  if (up) return up.st - t <= 15 ? { type: "soon", x: up, next: after(up.en) } : { type: "free", until: up.st, next: up };
+  return { type: "done", had: aktif.length > 0 };
+}
+function progress(x, t){
+  let tot = 0, el = 0;
+  for (const [a, b] of x.seg) { tot += b - a; el += Math.min(Math.max(t - a, 0), b - a); }
+  return tot ? el / tot : 0;
+}
+const STATUS = {
+  live:   ["s-live", "Berlangsung"],
+  pause:  ["s-wait", "Jeda"],
+  soon:   ["s-wait", "Segera dimulai"],
+  free:   ["s-idle", "Kosong"],
+  done:   ["s-idle", "Selesai"],
+  cancel: ["s-bad", "Dibatalkan"],
+  libur:  ["s-bad", "Libur"]
+};
+
+function rowHTML(r, st, t){
+  const s = (st.type === "done" && !st.had) ? ["s-idle", "Kosong"] : STATUS[st.type];
+  const pill = `<span class="status ${s[0]}"><i></i>${s[1]}</span>`;
+  let now = "", prog = "";
+  if (st.x) {
+    const x = st.x;
+    const nama = x.matkulTV || x.matkul;
+    const cls = x.matkul.length > 36 ? " xlong" : x.matkul.length > 24 ? " long" : "";
+    const pg = x.pengganti ? `<span class="pg">Pengganti</span>` : "";
+    if (st.type === "cancel") {
+      now = `<div class="l1">${pill}<span class="chip">${esc(x.kode)}</span><span class="kls">Kelas ${esc(x.kelas)}</span></div>
+        <div class="ttl strike${cls}">${esc(nama)}</div>
+        <div class="l3"><span>${esc(x.ket || "Kuliah tidak dilaksanakan")}</span><span class="rem">${fmt(x.st)}–${fmt(x.en)}</span></div>`;
+    } else {
+      let rem = "";
+      if (st.type === "live")  rem = `${dur(x.en - t)} lagi`;
+      if (st.type === "pause") rem = `lanjut ${fmt(st.resume[0])}`;
+      if (st.type === "soon")  rem = `mulai ${dur(x.st - t)} lagi`;
+      now = `<div class="l1">${pill}<span class="chip">${esc(x.kode)}</span>${pg}<span class="kls">Kelas ${esc(x.kelas)}</span></div>
+        <div class="ttl${cls}">${esc(nama)}</div>
+        <div class="l3"><span>Dosen ${esc(x.dosen)}, ${fmt(x.st)}–${fmt(x.en)}</span><span class="rem">${rem}</span></div>`;
+      if (st.type !== "soon") prog = `<div class="prog"><span style="width:${(progress(x, t) * 100).toFixed(1)}%"></span></div>`;
+    }
+  } else if (st.type === "free") {
+    now = `<div class="l1">${pill}</div><div class="idle-msg">Ruang tersedia hingga ${fmt(st.until)}</div>`;
+  } else if (st.type === "libur") {
+    now = `<div class="l1">${pill}</div><div class="idle-msg">Tidak ada perkuliahan hari ini</div>`;
+  } else {
+    now = `<div class="l1">${pill}</div><div class="idle-msg">${st.had ? "Tidak ada kelas lagi hari ini" : "Tidak ada jadwal hari ini"}</div>`;
+  }
+  const n = st.next;
+  const nx = n
+    ? `<div class="lbl">Berikutnya</div><div class="nt">${fmt(n.st)}</div><div class="nm">${esc(n.kode)} (${esc(n.kelas)})</div>`
+    : `<div class="lbl">Berikutnya</div><div class="none">Tidak ada</div>`;
+  return `<article class="row ${st.type}"${st.x ? ` style="--c:${st.x.warna}"` : ""}>
+    <div class="rno" style="--g:${gColor(r.gedung)}"><small>Gedung ${esc(r.gedung)}</small><b>${esc(r.id)}</b>${r.nama ? `<em>${esc(r.nama)}</em>` : ""}</div>
+    <div class="now">${now}</div><div class="nx">${nx}</div>${prog}</article>`;
+}
+
+function groupHead(g, lanjutan){
+  const here = P.lokasiLayar && g === P.lokasiLayar;
+  const note = here ? "Anda di sini" : (lanjutan ? "lanjutan" : (P.lokasiLayar ? "gedung lain" : ""));
+  return `<div class="ghead${here ? " here" : ""}" style="--g:${gColor(g)}"><b>Gedung ${esc(g)}</b><span>${note}</span></div>`;
+}
+
+/* =====================================================================
+   TAMPILAN
+   ===================================================================== */
+let VIEWS = [], viewIdx = 0, viewSince = Date.now(), rotate = qs.get("rotasi") !== "0";
+const perHalaman = () => CONFIG.BARIS_PER_KOLOM * 2;
+
+function buildViews(){
+  const pages = Math.max(1, Math.ceil(ROOMS.length / perHalaman()));
+  let h = "";
+  for (let i = 0; i < pages; i++) h += `<section class="view" data-kind="board" data-page="${i}" aria-label="Status ruang"><div class="board"></div></section>`;
+  if (ROOMS.length) h += `<section class="view" data-kind="timeline" aria-label="Linimasa hari ini"><div class="tl"></div></section>`;
+  $("views").innerHTML = h;
+  VIEWS = [...$("views").children].map(el => ({
+    el, kind: el.dataset.kind, page: Number(el.dataset.page || 0),
+    name: el.dataset.kind === "board" ? "Status ruang saat ini" + (pages > 1 ? ` (${Number(el.dataset.page) + 1}/${pages})` : "") : "Linimasa hari ini"
+  }));
+  buildTimeline();
+  showView(Math.min(viewIdx, VIEWS.length - 1));
+}
+function showView(i){
+  viewIdx = Math.max(0, i); viewSince = Date.now();
+  VIEWS.forEach((v, k) => v.el.classList.toggle("on", k === viewIdx));
+  $("viewDots").innerHTML = VIEWS.length > 1 ? VIEWS.map((v, k) => `<i class="${k === viewIdx ? "on" : ""}"></i>`).join("") : "";
+  $("viewName").textContent = VIEWS[viewIdx] ? VIEWS[viewIdx].name : "";
+  syncDemo();
+}
+
+function renderBoards(t){
+  VIEWS.filter(v => v.kind === "board").forEach(v => {
+    if (!ROOMS.length) {
+      v.el.innerHTML = `<div class="empty">${RAW ? "Belum ada ruang yang terdaftar. Isi lembar Ruang di Google Sheets." : "Data jadwal belum dapat dimuat. Periksa koneksi internet atau URL sumber data."}</div>`;
+      return;
+    }
+    const box = v.el.querySelector(".board");
+    if (!box) return;
+    const rooms = ROOMS.slice(v.page * perHalaman(), (v.page + 1) * perHalaman());
+    const half = Math.ceil(rooms.length / 2);
+    const cols = [rooms.slice(0, half), rooms.slice(half)];
+    box.innerHTML = cols.map((list, ci) => {
+      let h = "", prev = null;
+      list.forEach(r => {
+        if (r.gedung !== prev) {
+          const lanjutan = (ci > 0 && cols[0].some(x => x.gedung === r.gedung)) || (v.page > 0 && ci === 0 && prev === null && ROOMS.slice(0, v.page * perHalaman()).some(x => x.gedung === r.gedung));
+          h += groupHead(r.gedung, lanjutan); prev = r.gedung;
+        }
+        h += rowHTML(r, roomState(r.id, t), t);
+      });
+      return `<div class="col">${h}</div>`;
+    }).join("");
+  });
+}
+
+const pos = m => Math.min(100, Math.max(0, (m - T0) / (T1 - T0) * 100));
+function buildTimeline(){
+  const v = VIEWS.find(v => v.kind === "timeline"); if (!v) return;
+  let h = `<div class="tl-title">Ruang</div><div class="tl-hours">`;
+  for (let H = T0 / 60; H <= T1 / 60; H++) h += `<span style="left:${pos(H * 60)}%">${pad(H)}</span>`;
+  h += `</div>`;
+  for (const r of ROOMS) {
+    h += `<div class="tl-label" style="--g:${gColor(r.gedung)}"><b>${esc(r.id)}</b>${r.nama ? `<small>${esc(r.nama)}</small>` : ""}</div><div class="tl-track">`;
+    for (const b of BR.filter(b => b.besar)) h += `<div class="tl-band" style="left:${pos(b.st)}%;width:${pos(b.en) - pos(b.st)}%"></div>`;
+    for (const x of EV.filter(x => x.ruang === r.id)) for (const [a, b] of x.seg)
+      h += `<div class="tl-ev${x.batal ? " batal" : ""}" data-end="${b}" style="left:${pos(a)}%;width:${pos(b) - pos(a)}%;--c:${x.warna}">${esc(x.kode)} ${esc(x.kelas)}</div>`;
+    h += `<div class="tl-now"></div></div>`;
+  }
+  v.el.querySelector(".tl").innerHTML = h;
+}
+
+function buildTicker(){
+  const tr = $("tickTrack");
+  const items = NOTICES.map(p => `<span>${esc(p)}</span>`).join("");
+  tr.innerHTML = items + items;
+  const setDur = () => tr.style.setProperty("--dur", Math.max(25, tr.scrollWidth / 2 / 90) + "s");
+  requestAnimationFrame(setDur);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(setDur);
+}
+
+function renderBanner(t){
+  const el = $("banner"), [b, s, cd] = el.children;
+  const br = BR.find(x => t >= x.st && t < x.en);
+  let cls = "";
+  if (!ROOMS.length) {
+    b.textContent = "Jadwal belum tersedia"; s.textContent = "Menunggu data dari server"; cd.textContent = "";
+  } else if (LIBUR) {
+    b.textContent = "Libur"; s.textContent = LIBUR; cd.textContent = ""; cls = "bad";
+  } else if (br && EV.length) {
+    b.textContent = br.label;
+    s.textContent = br.besar ? `Perkuliahan dilanjutkan pukul ${fmt(br.en)}` : `Sesi berikutnya pukul ${fmt(br.en)}`;
+    cd.textContent = cdText((br.en - t) * 60);
+    if (br.besar) cls = "major";
+  } else if (!lastEnd) {
+    b.textContent = "Tidak ada perkuliahan terjadwal hari ini"; s.textContent = ""; cd.textContent = "";
+  } else if (t < firstStart) {
+    b.textContent = "Perkuliahan belum dimulai"; s.textContent = `Kelas pertama pukul ${fmt(firstStart)}`; cd.textContent = cdText((firstStart - t) * 60);
+  } else if (t >= lastEnd) {
+    b.textContent = "Perkuliahan hari ini telah selesai"; s.textContent = "Sampai jumpa besok"; cd.textContent = "";
+  } else {
+    let live = 0, free = 0;
+    ROOMS.forEach(r => { const k = roomState(r.id, t).type; if (k === "live") live++; if (k === "free" || k === "done" || k === "cancel") free++; });
+    b.textContent = `${live} kelas sedang berlangsung`;
+    s.textContent = `${free} ruang kosong saat ini`;
+    cd.textContent = "";
+  }
+  el.className = "banner" + (cls ? " " + cls : "");
+}
+
+/* =====================================================================
+   LOOP UTAMA
+   ===================================================================== */
+let lastKey = null;
+const tglFmt = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+function tick(){
+  const real = new Date();
+  if (RAW && tglLokal(real) !== curTgl) { susun(); return; } // ganti hari tengah malam
+
+  const t = nowMin();
+  const hh = Math.floor(t / 60), mm = Math.floor(t % 60), ss = Math.floor((t * 60) % 60);
+  $("jam").innerHTML = `${pad(hh)}:${pad(mm)}<small>${pad(ss)}</small>`;
+  $("offJam").textContent = `${pad(hh)}:${pad(mm)}`;
+  $("tanggal").textContent = tglFmt.format(real);
+  document.body.classList.toggle("sim", clock.sim);
+  const mulai = toMin(P.jamTampilMulai), selesai = toMin(P.jamTampilSelesai);
+  document.body.classList.toggle("is-off", !isNaN(mulai) && !isNaN(selesai) && (t < mulai || t >= selesai));
+
+  const key = Math.floor(t) + "|" + clock.sim;
+  if (key !== lastKey) {
+    lastKey = key;
+    renderBoards(t);
+    document.querySelectorAll(".tl-ev").forEach(e => e.classList.toggle("past", Number(e.dataset.end) <= t));
+  }
+  renderBanner(t);
+  document.querySelectorAll(".tl-now").forEach(n => { n.style.left = pos(t) + "%"; n.style.display = (t < T0 || t > T1) ? "none" : ""; });
+
+  if (rotate && VIEWS.length > 1 && (Date.now() - viewSince) / 1000 >= (CONFIG.DURASI_TAMPILAN[VIEWS[viewIdx].kind] || 30))
+    showView((viewIdx + 1) % VIEWS.length);
+
+  if (clock.sim && document.activeElement !== $("slider")) $("slider").value = Math.round(t);
+  $("sliderVal").textContent = fmt(t);
+
+  // Muat ulang halaman sekali sehari (03.00) agar browser TV tetap segar.
+  if (real.getHours() === 3 && real.getMinutes() === 0 && performance.now() > 120000) location.reload();
+}
+
+/* =====================================================================
+   PANEL DEMO
+   ===================================================================== */
+const demo = $("demo");
+const PRESETS = ["07:30", "09:30", "11:00", "11:50", "12:40", "15:10", "16:45", "18:40"];
+$("presets").innerHTML = PRESETS.map(p => `<button data-jam="${p}">${p.replace(":", ".")}</button>`).join("");
+function syncDemo(){
+  const q = a => demo.querySelector(`[data-act="${a}"]`);
+  q("real").classList.toggle("on", !clock.sim);
+  q("x1").classList.toggle("on", clock.sim && clock.speed === 1);
+  q("x60").classList.toggle("on", clock.sim && clock.speed === 60);
+  q("rotate").classList.toggle("on", rotate);
+}
+demo.addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  const act = btn.dataset.act, jam = btn.dataset.jam;
+  if (jam) setSim(toMin(jam), clock.sim ? clock.speed : 1);
+  else if (act === "real") setReal();
+  else if (act === "x1") setSim(nowMin(), 1);
+  else if (act === "x60") setSim(nowMin(), 60);
+  else if (act === "view") showView((viewIdx + 1) % Math.max(1, VIEWS.length));
+  else if (act === "rotate") { rotate = !rotate; viewSince = Date.now(); syncDemo(); }
+  else if (act === "reload") muatData();
+  else if (act === "hide") demo.hidden = true;
+  tick();
+});
+$("slider").addEventListener("input", e => { setSim(Number(e.target.value), clock.sim ? clock.speed : 1); tick(); });
+document.addEventListener("keydown", e => { if (e.key === "d" || e.key === "D") demo.hidden = !demo.hidden; });
+
+/* =====================================================================
+   MULAI
+   ===================================================================== */
+fit();
+const jamAwal = qs.get("jam");
+if (jamAwal && !isNaN(toMin(jamAwal))) setSim(toMin(jamAwal), 1);
+
+if (CONFIG.SUMBER_DATA) {
+  if (!muatCache()) terima(null, false);
+  muatData();
+  setInterval(muatData, CONFIG.MUAT_ULANG_MENIT * 60000);
+} else {
+  terima(DATA_CONTOH, true);
+}
+renderDataInfo();
+demo.hidden = !(qs.get("demo") === "1" || (SAMPLE && qs.get("demo") !== "0"));
+syncDemo();
+tick();
+setInterval(tick, 1000);
+
+if (CONFIG.PAKAI_OFFLINE && "serviceWorker" in navigator && location.protocol === "https:" && !/claude\.(ai|site)$/.test(location.hostname)) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+})();
+</script>
+</body>
+</html>
